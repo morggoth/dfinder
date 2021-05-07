@@ -14,18 +14,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// User has many CreditCards, UserID is the foreign key
-type User struct {
-	gorm.Model
-	CreditCards []CreditCard
-}
-
-type CreditCard struct {
-	gorm.Model
-	Number string
-	UserID uint
-}
-
 type Hashes struct {
 	ID    uint
 	Hash  string `gorm:"unique"`
@@ -34,95 +22,35 @@ type Hashes struct {
 
 type Files struct {
 	ID       uint
-	FilePath string
+	FilePath string `gorm:"unique"`
 	HashesID uint
 }
 
-// type FileHashes struct {
-// 	ID      uint
-// 	Hash    string `gorm:"unique"`
-// 	Counter int
-// }
-
-// type Files struct {
-// 	gorm.Model
-// 	FilePath string
-// 	// HashId   int
-// 	HashId FileHashes
-// }
-
 func dbInteract(hash, path string, db *gorm.DB) {
-	// db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
-	// if err != nil {
-	// 	panic("failed to connect database")
-	// }
-
-	// // Migrate the schema
-	// // db.AutoMigrate(&Product{})
-	// db.AutoMigrate(&Hashes{}, &Files{})
-
-	// // Start Association Mode
-	// var hashes Hashes
-	// db.Model(&hashes).Association("Hash")
-
-	// user := User{Name: "Jinzhu", Age: 18, Birthday: time.Now()}
-
-	// result := db.Create(&user) // pass pointer of data to Create
-
-	// user.ID             // returns inserted data's primary key
-	// result.Error        // returns error
-	// result.RowsAffected // returns inserted records count
-
-	// Create
-	// db.Create(&Product{Code: "D42", Price: 100})
-
 	hashInstance := Hashes{Hash: hash}
+	log.Printf("hashInstance struct now is: %v", hashInstance)
+
 	if result := db.Create(&hashInstance); result.Error != nil {
 		if result.Error.Error() == "UNIQUE constraint failed: hashes.hash" {
-			fmt.Println("not a unique value")
+			log.Printf("Hash %s already exists", hashInstance.Hash)
+
+			db.Where("hash = ?", hash).First(&hashInstance)
+			log.Printf("hashInstance struct now is: %v", hashInstance)
 		} else {
-			// log.Fatal(result.Error)
-			fmt.Println(result.Error)
-			fmt.Println("some error")
-			fmt.Printf("%+v\n", result)
+			log.Fatal(result.Error)
 		}
 	}
 
-	// result := db.Where("hash = ?", hash).First(&hashes)
+	fileInstance := Files{FilePath: path, HashesID: hashInstance.ID}
+	log.Printf("fileInstance struct now is: %v", fileInstance)
 
-	fmt.Printf("%+v\n", hashInstance)
-	db.Create(&Files{FilePath: path, HashesID: hashInstance.ID})
-
-	// result2 := db.Create(&hashInstance)
-	// fmt.Printf("%+v\n", result2)
-
-	// db.Create(&Files{FilePath: path})
-	// db.Create(&Files{FilePath: "/Users/morggoth/wk/p/dfinder/tests/MD5SUMS", HashId: 1})
-	// db.Create(&Files{FilePath: path})
-
-	// // Start Association Mode
-	// var user User
-	// db.Model(&user).Association("Languages")
-	// // `user` is the source model, it must contains primary key
-	// // `Languages` is a relationship's field name
-	// // If the above two requirements matched, the AssociationMode should be started successfully, or it should return error
-	// db.Model(&user).Association("Languages").Error
-
-	// 3e90dcae65ccd49e160b02a5dd83f649c6be27bc9765cd038a9d1d2547a179fb        /Users/morggoth/wk/p/dfinder/tests/MD5SUMS
-
-	// // Read
-	// var product Product
-	// db.First(&product, 1)                 // find product with integer primary key
-	// db.First(&product, "code = ?", "D42") // find product with code D42
-
-	// // Update - update product's price to 200
-	// db.Model(&product).Update("Price", 200)
-	// // Update - update multiple fields
-	// db.Model(&product).Updates(Product{Price: 200, Code: "F42"}) // non-zero fields
-	// db.Model(&product).Updates(map[string]interface{}{"Price": 200, "Code": "F42"})
-
-	// // Delete - delete product
-	// db.Delete(&product, 1)
+	if result2 := db.Create(&fileInstance); result2.Error != nil {
+		if result2.Error.Error() == "UNIQUE constraint failed: files.file_path" {
+			log.Printf("File %s already exists", fileInstance.FilePath)
+		} else {
+			log.Fatal(result2.Error)
+		}
+	}
 }
 
 func check_error(e error) {
@@ -165,11 +93,10 @@ func hashWalk(path string, info os.FileInfo, err error) error {
 func main() {
 	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	if err != nil {
-		panic("failed to connect database")
+		log.Fatal("failed to connect database")
 	}
 
 	// Migrate the schema
-	// db.AutoMigrate(&Product{})
 	db.AutoMigrate(&Hashes{}, &Files{})
 
 	// err := filepath.Walk(".", hashWalk)
