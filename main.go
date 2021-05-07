@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
-	"fmt"
+	"encoding/hex"
 	"io"
 	"io/ioutil"
 	"log"
@@ -59,36 +59,34 @@ func check_error(e error) {
 	}
 }
 
-func hashWalk(path string, info os.FileInfo, err error) error {
-	if info.IsDir() {
+// func hashWalk(path string, info os.FileInfo, err error) error {
+// 	if info.IsDir() {
+// 		log.Printf("%s\n", info.Name())
+// 	} else {
+// 		dat, err := ioutil.ReadFile(path)
+// 		if err != nil {
+// 			return err
+// 		}
 
-		fmt.Printf("%s\n", info.Name())
-	} else {
+// 		sha256Hash := sha256.New()
 
-		dat, err := ioutil.ReadFile(path)
-		if err != nil {
-			return err
-		}
+// 		_, err = io.Copy(sha256Hash, bytes.NewReader(dat))
+// 		if err != nil {
+// 			return err
+// 		}
 
-		sha256Hash := sha256.New()
+// 		sum := sha256Hash.Sum(nil)
 
-		_, err = io.Copy(sha256Hash, bytes.NewReader(dat))
-		if err != nil {
-			return err
-		}
+// 		absPath, err := filepath.Abs(path)
+// 		if err != nil {
+// 			return err
+// 		}
 
-		sum := sha256Hash.Sum(nil)
+// 		log.Printf("%x	%s\n", sum, absPath)
+// 	}
 
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("%x	%s\n", sum, absPath)
-	}
-
-	return nil
-}
+// 	return nil
+// }
 
 func main() {
 	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
@@ -99,17 +97,48 @@ func main() {
 	// Migrate the schema
 	db.AutoMigrate(&Hashes{}, &Files{})
 
-	// err := filepath.Walk(".", hashWalk)
-	// check_error(err)
+	var walk = func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() {
+			log.Printf("%s\n", info.Name())
+		} else {
+			dat, err := ioutil.ReadFile(path)
+			if err != nil {
+				return err
+			}
 
-	hash := "3e90dcae65ccd49e160b02a5dd83f649c6be27bc9765cd038a9d1d2547a179fb"
-	path := "/Users/morggoth/wk/p/dfinder/tests/MD5SUMS"
+			sha256Hash := sha256.New()
 
-	dbInteract(hash, path, db)
+			_, err = io.Copy(sha256Hash, bytes.NewReader(dat))
+			if err != nil {
+				return err
+			}
 
-	hash1 := "another_hash"
-	path1 := "another_path"
-	dbInteract(hash1, path1, db)
+			sum := hex.EncodeToString(sha256Hash.Sum(nil))
+
+			absPath, err := filepath.Abs(path)
+			if err != nil {
+				return err
+			}
+
+			dbInteract(sum, absPath, db)
+
+			log.Printf("%s	%s\n", sum, absPath)
+		}
+
+		return nil
+	}
+
+	err = filepath.Walk(".", walk)
+	check_error(err)
+
+	// hash := "3e90dcae65ccd49e160b02a5dd83f649c6be27bc9765cd038a9d1d2547a179fb"
+	// path := "/Users/morggoth/wk/p/dfinder/tests/MD5SUMS"
+
+	// dbInteract(hash, path, db)
+
+	// hash1 := "another_hash"
+	// path1 := "another_path"
+	// dbInteract(hash1, path1, db)
 
 	// dat, err := ioutil.ReadFile("tests/groovy-server-cloudimg-armhf-root.tar.xz")
 	// check_error(err)
